@@ -5,16 +5,18 @@ namespace App\Events;
 use App\Requests\Request;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Queue\SerializesModels;
 
 class RequestCreated implements ShouldBroadcast
 {
-    use SerializesModels;
-
     /**
      * @var Request
      */
     public $request;
+    
+    /**
+     * @var int
+     */
+    public $total = 0;
 
     /**
      * NewRequest constructor.
@@ -23,6 +25,8 @@ class RequestCreated implements ShouldBroadcast
     public function __construct(Request $request)
     {
         $this->request = $request;
+        
+        $this->total = Request::where('token_id', $request->token_id)->count();
     }
 
     /**

@@ -33,20 +33,57 @@ angular
         }
     ])
     .controller("AppController", ['$scope', '$http', '$stateParams', '$state', '$timeout', function($scope, $http, $stateParams, $state, $timeout) {
-        $scope.token = {};
+        /**
+         * Settings handling
+         */
+
+        // Array of scope variables to automatically save
+        var settings = ['redirectEnable', 'redirectUrl', 'redirectContentType', 'redirectMethod', 'token', 'formatJsonEnable'];
+
+        $scope.saveSettings = (function () {
+            for (var setting in settings) {
+                window.localStorage.setItem(
+                    settings[setting],
+                    JSON.stringify($scope[settings[setting]])
+                );
+            }
+        });
+
+        $scope.getSetting = (function (name, defaultValue) {
+            var value = window.localStorage.getItem(name);
+
+            if (!value || typeof(value) === 'undefined' || value === 'undefined') {
+                if (typeof(defaultValue) === 'undefined') {
+                    return null;
+                }
+                return defaultValue;
+            }
+
+            return JSON.parse(value);
+        });
+
+        /**
+         * App Initialization
+         */
+
+        $scope.token = $scope.getSetting('token');
         $scope.requests = {
+            total: 0,
             data: []
         };
         $scope.currentRequestIndex = 0;
         $scope.currentRequest = {};
         $scope.currentPage = 1;
         $scope.hasRequests = false;
+        $scope.protocol = window.location.protocol;
         $scope.domain = window.location.hostname;
+        $scope.appConfig = window.AppConfig;
 
-        /**
-         * App Initialization
-         */
-
+        $scope.formatJsonEnable = $scope.getSetting('formatJsonEnable', false);
+        $scope.redirectEnable = $scope.getSetting('redirectEnable', false);
+        $scope.redirectMethod = $scope.getSetting('redirectMethod', '');
+        $scope.redirectUrl = $scope.getSetting('redirectUrl', null);
+        $scope.redirectContentType = $scope.getSetting('redirectContentType', 'text/plain');
 
         // Initialize Clipboard copy button
         new Clipboard('.copyTokenUrl');
@@ -77,6 +114,9 @@ angular
             $('.modal-backdrop').appendTo('.mainView');
             $('body').removeClass();
         });
+
+        // Automatically save settings
+        $scope.$watch($scope.saveSettings);
 
         /**
          * Controller actions
@@ -129,6 +169,7 @@ angular
             $scope.pusherChannel = $scope.pusher.subscribe(token);
             $scope.pusherChannel.bind('request.created', function(data) {
                 $scope.requests.data.push(data.request);
+                $scope.requests.total = data.total;
 
                 if ($scope.currentRequestIndex == 0) {
                     $scope.setCurrentRequest($scope.requests.data[0]);
@@ -137,18 +178,10 @@ angular
                 $scope.hasRequests = true;
                 $scope.$apply();
                 $.notify('Request received');
-            });
-        });
 
-        $scope.getNextPage = (function(token) {
-            $http({
-                url: '/token/' + token + '/requests',
-                params: {page: $scope.requests.current_page + 1}
-            }).success(function(data, status, headers, config) {
-                // We use next_page_url to keep track of whether we should load more pages.
-                $scope.requests.next_page_url = data.next_page_url;
-                $scope.requests.current_page = data.current_page;
-                $scope.requests.data = $scope.requests.data.concat(data.data);
+                if ($scope.redirectEnable) {
+                    $scope.redirect(data.request, $scope.redirectUrl, $scope.redirectMethod);
+                }
             });
         });
 
@@ -184,6 +217,42 @@ angular
                     $state.go('token', {id: response.data.uuid});
                     $.notify('New URL created');
                 });
+        });
+
+        $scope.getNextPage = (function(token) {
+            $http({
+                url: '/token/' + token + '/requests',
+                params: {page: $scope.requests.current_page + 1}
+            }).success(function(data, status, headers, config) {
+                // We use next_page_url to keep track of whether we should load more pages.
+                $scope.requests.next_page_url = data.next_page_url;
+                $scope.requests.current_page = data.current_page;
+                $scope.requests.data = $scope.requests.data.concat(data.data);
+            });
+        });
+
+        $scope.redirect = (function (request, url, method) {
+            $http({
+                'method': (!method ? request.method : method),
+                'url': url,
+                'data': request.content,
+                'headers': {
+                    'Content-Type': 'text/plain'
+                }
+            }).then(
+                function ok(response) {
+                    $.notify('Redirected request to ' + url + '<br>Status: ' + response.statusText);
+                },
+                function error(response) {
+                    $.notify(
+                        'Error redirecting request to ' + url + '<br>Status: ' + response.statusText,
+                        {
+                            delay: 5000,
+                            type: 'danger'
+                        }
+                    );
+                }
+            );
         });
 
         $scope.getLabel = function(method) {
@@ -226,7 +295,11 @@ angular
 
         // Initialize app. Check whether we need to load a token.
         if ($state.current.name) {
-            $scope.getToken($stateParams.id, $stateParams.offset, $stateParams.page);
+            if ($scope.getSetting('token') && !$stateParams.id) {
+                $state.go('token', {id: $scope.getSetting('token').uuid});
+            } else {
+                $scope.getToken($stateParams.id, $stateParams.offset, $stateParams.page);
+            }
         }
     }])
     .run(['$rootScope', '$state', '$stateParams',

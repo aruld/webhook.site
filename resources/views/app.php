@@ -21,6 +21,7 @@
     <script>
         AppConfig = {
             PusherToken: "<?=config('broadcasting.connections.pusher.key')?>",
+            MaxRequests: <?=config('app.max_requests')?>
         };
     </script>
 
@@ -64,7 +65,7 @@
                     <div class="form-group">
                         <input id="tokenUrl" type="text" class="form-control click-select"
                                style="width: 200px;"
-                               value="https://{{ domain }}/{{ token.uuid }}">
+                               value="{{ protocol }}//{{ domain }}/{{ token.uuid }}">
                     </div>
                     <button class="btn btn-success copyTokenUrl" data-clipboard-target="#tokenUrl">
                         <span class="glyphicon glyphicon-copy"></span> Copy
@@ -80,7 +81,7 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-sm-3 col-md-2 sidebar">
-                <p class="sidebar-header">Requests ({{ requests.data.length }})</p>
+                <p class="sidebar-header">Requests ({{ requests.total || 0 }})</p>
 
                 <p ng-show="!hasRequests" class="small">
                     <img src="assets/images/loader.gif"/>
@@ -105,6 +106,13 @@
                 </ul>
             </div>
             <div id="request" class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
+                <div id="rate-limit-warning"
+                     class="alert alert-warning"
+                     ng-show="hasRequests && requests.total >= appConfig.MaxRequests">
+                      <p><strong>This URL received over {{ appConfig.MaxRequests }} requests and can't accept more webhooks.</strong></p>
+                      <p>New requests sent to this URL will return HTTP status code 410 Gone and
+                          won't be logged. Please create a new URL to continue.</p>
+                </div>
                 <div ng-show="!hasRequests">
                     <p><strong>Webhook Tester</strong>
                         allows you to easily test webhooks and other types of HTTP requests.</p>
@@ -113,10 +121,10 @@
                     <hr>
                     <p>Here's your unique URL that was created just now:</p>
                     <p>
-                        <code>https://{{ domain }}/{{ token.uuid }}</code>
+                        <code>{{ protocol }}//{{ domain }}/{{ token.uuid }}</code>
                         <a class="btn btn-xs btn-link copyTokenUrl" data-clipboard-target="#tokenUrl">Copy</a>
                         <a class="btn btn-xs btn-link"
-                           href="https://{{ domain }}/{{ token.uuid }}"
+                           href="{{ protocol }}//{{ domain }}/{{ token.uuid }}"
                            target="_blank">
                             <span class="glyphicon glyphicon-new-window"></span> Open in new tab</a>
                     </p>
@@ -128,7 +136,7 @@
                 <div ng-show="hasRequests">
                     <div class="container-fluid">
                         <div class="row">
-                            <div class="col-md-9">
+                            <div class="col-md-4">
                                 <a class="btn btn-xs btn-link"
                                    ng-click="setCurrentRequest(requests.data[0])"
                                    ng-class="requests.data.indexOf(currentRequest) !== 0 ? '' : 'disabled'">
@@ -143,12 +151,24 @@
                                     Next &rightarrow;</a>
                                 <a class="btn btn-xs btn-link"
                                    ng-class="requests.data.indexOf(currentRequest) !== requests.data.length-1 ? '' : 'disabled'"
-                                   ng-click="setCurrentRequest(requests.data[requests.data.count()])">
+                                   ng-click="setCurrentRequest(requests.data[requests.data.length-1])">
                                 Last</a>
                             </div>
-                            <div class="col-md-3">
-                                <label style="float: right"><input type="checkbox" ng-model="hideDetails"> Hide Request
-                                    Details</label>
+                            <div class="col-md-8" style="padding-bottom: 10px">
+                                <!-- Redirection -->
+                                <label class="small" title="Redirect incoming requests to another URL via XHR"
+                                       ng-disabled="!redirectUrl">
+                                    <input type="checkbox" ng-model="redirectEnable"
+                                           ng-disabled="!redirectUrl" /> Auto redirect</label>
+                                <a href class="openModal btn btn-xs" data-modal="#redirectModal">Settings...</a>
+                                <a ng-click="redirect(currentRequest, redirectUrl, redirectMethod)"
+                                   class="btn btn-xs" ng-class="redirectUrl ? '' : 'disabled'">Redirect Now</a>&emsp;&emsp;
+
+                                <!-- Auto-JSON -->
+                                <label class="small" title="Automatically applies easy to read JSON formatting on valid requests">
+                                    <input type="checkbox" ng-model="formatJsonEnable"/> Format JSON</label>
+
+                                <label class="small" style="float: right"><input type="checkbox" ng-model="hideDetails"> Hide Details</label>
                             </div>
                         </div>
                         <div class="row" id="requestDetails" ng-show="!hideDetails">
@@ -156,40 +176,23 @@
                                 <table class="table table-borderless table-striped">
                                     <tbody>
                                     <tr>
-                                        <th colspan="2">Request Details</th>
+                                        <th colspan="2">
+                                            Request Details
+                                            <a class="pull-right small"
+                                               href="{{ protocol }}//{{ domain }}/#/{{ token.uuid }}/{{ currentRequestIndex }}/{{ currentPage }}">
+                                                permalink</a>
+                                        </th>
                                     </tr>
                                     <tr>
                                         <td width="25%">URL</td>
-                                        <td id="req-url"><a href="{{ currentRequest.url }}">{{ currentRequest.url }}</a>
+                                        <td id="req-url">
+                                            <span class="label label-{{ getLabel(currentRequest.method) }}">{{ currentRequest.method }}</span>
+                                            <a href="{{ currentRequest.url }}">{{ currentRequest.url }}</a>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td>Host</td>
                                         <td id="req-ip">{{ currentRequest.ip }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Date</td>
-                                        <td id="req-date">{{ currentRequest.created_at | date:'shortTime' : 'UTC' }}
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Method</td>
-                                        <td id="req-method">{{ currentRequest.method }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Link</td>
-                                        <td id="req-direct-link">
-                                            <a href="https://{{ domain }}/#/{{ token.uuid }}/{{ currentRequestIndex }}/{{ currentPage }}">Direct
-                                                link to request</a></td>
-                                    </tr>
-                                    <tr ng-show="hasRequests && currentRequest.content != '' && isValidJSON(currentRequest.content)">
-                                        <td>Options</td>
-                                        <td>
-                                            <a class=""
-                                               ng-click="currentRequest.content = formatContentJson(currentRequest.content)"
-                                               style="">
-                                                Format JSON</a>
-                                        </td>
                                     </tr>
                                     </tbody>
                                 </table>
@@ -202,8 +205,8 @@
                                     </tr>
                                     <tr ng-repeat="(headerName, values) in currentRequest.headers">
                                         <td width="25%">{{ headerName }}</td>
-                                        <td><code ng-repeat="value in values">{{ (value == '' ? '(empty)' : value)
-                                                }}{{$last ? '' : ', '}}</code></td>
+                                        <td><code ng-repeat="value in values">
+                                                {{ value == '' ? '(empty)' : value }}{{ $last ? '' : ', ' }}</code></td>
                                     </tr>
                                     </tbody>
                                 </table>
@@ -212,12 +215,12 @@
 
                         <div class="row">
                             <div class="col-md-12">
-                                <p ng-show="hasRequests && currentRequest.content == ''">
-                                    The request did not have any body content.</p>
+                                <p id="noContent" ng-show="hasRequests && currentRequest.content == ''">
+                                    (no body content)</p>
 
                                 <pre id="req-content"
                                      ng-show="hasRequests && currentRequest.content != ''"
-                                     ng-bind="currentRequest.content"></pre>
+                                     ng-bind="formatJsonEnable ? formatContentJson(currentRequest.content) : currentRequest.content"></pre>
                             </div>
                         </div>
                     </div>
@@ -225,6 +228,66 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" tabindex="-1" role="dialog" id="redirectModal">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title">Redirection Settings</h4>
+                </div>
+                <div class="modal-body">
+                    <form class="form-horizontal" id="redirectForm">
+                        <fieldset>
+                            <div class="form-group">
+                                <div class="container-fluid">
+                                    <p>Redirection allows you to automatically, or with a click, send incoming
+                                        requests to another URL via XHR. The content will be redirected, and you can choose
+                                        a static method to use.</p>
+                                    <p>Since XHR is used, there might be issues with Cross-Domain Requests.</p>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="col-md-4 control-label" for="redirectUrl">Redirect to</label>
+                                <div class="col-md-7">
+                                    <input id="redirectUrl" ng-model="redirectUrl"
+                                           placeholder="http://localhost"
+                                           class="form-control input-md">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="col-md-4 control-label" for="redirectContentType">Content Type</label>
+                                <div class="col-md-7">
+                                    <input id="redirectContentType" ng-model="redirectContentType"
+                                           class="form-control input-md">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="col-md-4 control-label" for="redirectUrl">HTTP Method</label>
+                                <div class="col-md-5">
+                                    <select class="form-control input-md" ng-model="redirectMethod">
+                                        <option value="">Default (use request method)</option>
+                                        <option value="GET">GET</option>
+                                        <option value="POST">POST</option>
+                                        <option value="PUT">PUT</option>
+                                        <option value="DELETE">DELETE</option>
+                                        <option value="PATCH">PATCH</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" ng-click="saveSettings()" data-dismiss="modal">Close</button>
+                </div>
+            </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
 
     <div class="modal fade" tabindex="-1" role="dialog" id="helpModal">
         <div class="modal-dialog" role="document">
@@ -239,13 +302,13 @@
                         allows you to easily test webhooks and other types of HTTP requests.</p>
                     <p>Here's your unique URL:</p>
                     <p>
-                        <code>https://{{ domain }}/{{ token.uuid }}</code>
-                        <a href="https://{{ domain }}/{{ token.uuid }}" target="_blank">(try it!)</a>
+                        <code>{{ protocol }}//{{ domain }}/{{ token.uuid }}</code>
+                        <a href="{{ protocol }}//{{ domain }}/{{ token.uuid }}" target="_blank">(try it!)</a>
                     </p>
                     <p>Any requests sent to that URL are instantly logged here - you don't even have to refresh.</p>
                     <p>
                         Append a status code to the url, e.g.: <br/>
-                        <code>https://{{ domain }}/{{ token.uuid }}/404</code>, <br/>
+                        <code>{{ protocol }}//{{ domain }}/{{ token.uuid }}/404</code>, <br/>
                         so the URL will respond with a 404 Not Found.</p>
                     <p>You can bookmark this page to go back to the request contents at any time.</p>
                     <p><a href="https://github.com/fredsted/webhook.site">Fork this on GitHub</a></p>
@@ -319,7 +382,6 @@
             </div><!-- /.modal-content -->
         </div><!-- /.modal-dialog -->
     </div><!-- /.modal -->
-
 
     <script>
         (function (i, s, o, g, r, a, m) {
