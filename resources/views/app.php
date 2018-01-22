@@ -67,11 +67,13 @@
                                style="width: 200px;"
                                value="{{ protocol }}//{{ domain }}/{{ token.uuid }}">
                     </div>
-                    <button class="btn btn-success copyTokenUrl" data-clipboard-target="#tokenUrl">
+                    <button class="btn btn-success copyTokenUrl" data-clipboard-target="#tokenUrl"
+                            ga-on="click" ga-event-category="URLCopy" ga-event-action="copy-nav">
                         <span class="glyphicon glyphicon-copy"></span> Copy
                     </button> &nbsp;
                     <button type="button" class="btn btn-primary openModal" data-modal="#newUrlModal">
-                        <span class="glyphicon glyphicon-plus-sign"></span> New URL
+                        <span class="glyphicon glyphicon-plus-sign"
+                              ga-on="click" ga-event-category="Request" ga-event-action="click-newurl"></span> New URL
                     </button>
                 </div>
             </div>
@@ -109,9 +111,10 @@
                 <div id="rate-limit-warning"
                      class="alert alert-warning"
                      ng-show="hasRequests && requests.total >= appConfig.MaxRequests">
-                      <p><strong>This URL received over {{ appConfig.MaxRequests }} requests and can't accept more webhooks.</strong></p>
-                      <p>New requests sent to this URL will return HTTP status code 410 Gone and
-                          won't be logged. Please create a new URL to continue.</p>
+                    <p><strong>This URL received over {{ appConfig.MaxRequests }} requests and can't accept more
+                            webhooks.</strong></p>
+                    <p>New requests sent to this URL will return HTTP status code 410 Gone and
+                        won't be logged. Please create a new URL to continue.</p>
                 </div>
                 <div ng-show="!hasRequests">
                     <p><strong>Webhook Tester</strong>
@@ -122,7 +125,8 @@
                     <p>Here's your unique URL that was created just now:</p>
                     <p>
                         <code>{{ protocol }}//{{ domain }}/{{ token.uuid }}</code>
-                        <a class="btn btn-xs btn-link copyTokenUrl" data-clipboard-target="#tokenUrl">Copy</a>
+                        <a class="btn btn-xs btn-link copyTokenUrl" data-clipboard-target="#tokenUrl"
+                           ga-on="click" ga-event-category="URLCopy" ga-event-action="copy-welcome">Copy</a>
                         <a class="btn btn-xs btn-link"
                            href="{{ protocol }}//{{ domain }}/{{ token.uuid }}"
                            target="_blank">
@@ -131,7 +135,9 @@
                     <hr>
                     <p>Bookmark this page to go back to the requests at any time.
                         For more info, click <b>Help</b>.</p>
-                    <p><a href="https://github.com/fredsted/webhook.site">Fork this on GitHub</a></p>
+                    <p><a href="https://github.com/fredsted/webhook.site"
+                          ga-on="click" ga-event-category="Nav" ga-event-action="click-github">Fork this on GitHub</a>
+                    </p>
                 </div>
                 <div ng-show="hasRequests">
                     <div class="container-fluid">
@@ -152,23 +158,39 @@
                                 <a class="btn btn-xs btn-link"
                                    ng-class="requests.data.indexOf(currentRequest) !== requests.data.length-1 ? '' : 'disabled'"
                                    ng-click="setCurrentRequest(requests.data[requests.data.length-1])">
-                                Last</a>
+                                    Last</a>
                             </div>
                             <div class="col-md-8" style="padding-bottom: 10px">
                                 <!-- Redirection -->
                                 <label class="small" title="Redirect incoming requests to another URL via XHR"
                                        ng-disabled="!redirectUrl">
                                     <input type="checkbox" ng-model="redirectEnable"
-                                           ng-disabled="!redirectUrl" /> Auto redirect</label>
-                                <a href class="openModal btn btn-xs" data-modal="#redirectModal">Settings...</a>
-                                <a ng-click="redirect(currentRequest, redirectUrl, redirectMethod)"
-                                   class="btn btn-xs" ng-class="redirectUrl ? '' : 'disabled'">Redirect Now</a>&emsp;&emsp;
+                                           ng-disabled="!redirectUrl"
+                                           ga-on="click" ga-event-category="AutoRedirect" ga-event-action="toggle"/>
+                                    Auto redirect
+                                </label>
+                                <a href class="openModal btn btn-xs" data-modal="#redirectModal"
+                                   ga-on="click" ga-event-category="AutoRedirect"
+                                   ga-event-action="settings">Settings...</a>
+                                <a ng-click="redirect(currentRequest, redirectUrl, redirectMethod, redirectContentType)"
+                                   class="btn btn-xs" ng-class="redirectUrl ? '' : 'disabled'"
+                                   ga-on="click" ga-event-category="AutoRedirect" ga-event-action="redir-now">Redirect
+                                    Now</a>&emsp;&emsp;
 
                                 <!-- Auto-JSON -->
-                                <label class="small" title="Automatically applies easy to read JSON formatting on valid requests">
-                                    <input type="checkbox" ng-model="formatJsonEnable"/> Format JSON</label>
+                                <label class="small"
+                                       title="Automatically applies easy to read JSON formatting on valid requests">
+                                    <input type="checkbox" ng-model="formatJsonEnable"
+                                           ga-on="click" ga-event-category="JSONFormat" ga-event-action="toggle"/> Format JSON</label> &emsp;
 
-                                <label class="small" style="float: right"><input type="checkbox" ng-model="hideDetails"> Hide Details</label>
+                                <!-- Auto Navigate -->
+                                <label class="small"
+                                       title="Automatically select and go to the latest incoming webhook request">
+                                    <input type="checkbox" ng-model="autoNavEnable"
+                                           ga-on="click" ga-event-category="AutoNav" ga-event-action="toggle"/> Auto navigate</label>
+
+                                <label class="small" style="float: right"><input type="checkbox" ng-model="hideDetails">
+                                    Hide Details</label>
                             </div>
                         </div>
                         <div class="row" id="requestDetails" ng-show="!hideDetails">
@@ -243,7 +265,8 @@
                             <div class="form-group">
                                 <div class="container-fluid">
                                     <p>Redirection allows you to automatically, or with a click, send incoming
-                                        requests to another URL via XHR. The content will be redirected, and you can choose
+                                        requests to another URL via XHR. The content will be redirected, and you can
+                                        choose
                                         a static method to use.</p>
                                     <p>Since XHR is used, there might be issues with Cross-Domain Requests.</p>
                                 </div>
@@ -283,7 +306,8 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-default" ng-click="saveSettings()" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-default" ng-click="saveSettings()" data-dismiss="modal">Close
+                    </button>
                 </div>
             </div><!-- /.modal-content -->
         </div><!-- /.modal-dialog -->
@@ -375,7 +399,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" data-dismiss="modal" ng-click="getCustomToken()">
+                    <button type="button" class="btn btn-primary" data-dismiss="modal" ng-click="getCustomToken()"
+                            ga-on="click" ga-event-category="Request" ga-event-action="create">
                         Create
                     </button>
                 </div>
@@ -384,21 +409,16 @@
     </div><!-- /.modal -->
 
     <script>
-        (function (i, s, o, g, r, a, m) {
-            i['GoogleAnalyticsObject'] = r;
-            i[r] = i[r] || function () {
-                (i[r].q = i[r].q || []).push(arguments)
-            }, i[r].l = 1 * new Date();
-            a = s.createElement(o),
-                m = s.getElementsByTagName(o)[0];
-            a.async = 1;
-            a.src = g;
-            m.parentNode.insertBefore(a, m)
-        })(window, document, 'script', 'https://www.google-analytics.com/analytics.js', 'ga');
-
+        window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
         ga('create', 'UA-5230636-9', 'auto');
+        ga('require', 'eventTracker');
+        ga('require', 'outboundLinkTracker');
+        ga('require', 'urlChangeTracker');
+        ga('require', 'pageVisibilityTracker');
         ga('send', 'pageview');
     </script>
+    <script async src="https://www.google-analytics.com/analytics.js"></script>
+    <script async src="/assets/scripts/libs/autotrack.js"></script>
 </div>
 </body>
 </html>
